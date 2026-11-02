@@ -1295,7 +1295,89 @@ export class InstagramProvider
       }))
     );
 
+    analytics.push(
+      ...(await this.followersAndPosts(id, accessToken, date, type))
+    );
+
     return analytics;
+  }
+
+  // The insights only have the daily follower gains (and none below 100
+  // followers): add the current follower count and the posts published in
+  // the range, grouped by day. A failure here never hides the insights.
+  private async followersAndPosts(
+    id: string,
+    accessToken: string,
+    date: number,
+    type: string
+  ) {
+    try {
+      // the public API passes ?date= through, the app offers up to 90 days
+      const range = Math.min(Math.max(Math.floor(date), 1), 90);
+      const today = dayjs().format('YYYY-MM-DD');
+      const since = dayjs()
+        .subtract(range - 1, 'day')
+        .startOf('day');
+
+      const { followers_count } = await (
+        await fetch(
+          `https://${type}/${META_GRAPH_API_VERSION}/${id}?fields=followers_count&access_token=${accessToken}`
+        )
+      ).json();
+
+      const posts: Record<string, number> = {};
+      let nextUrl:
+        | string
+        | undefined = `https://${type}/${META_GRAPH_API_VERSION}/${id}/media?fields=timestamp&limit=100&access_token=${accessToken}`;
+      let pages = 0;
+      // feed media only, the media edge doesn't return stories
+      while (nextUrl && pages < 10) {
+        const { data, paging, error } = await (await fetch(nextUrl)).json();
+        if (error) {
+          throw new Error(error.message);
+        }
+        nextUrl = paging?.next;
+        pages++;
+
+        for (const media of data || []) {
+          const published = dayjs(media.timestamp);
+          // skipped rather than stopping, a pinned post can be older
+          if (published.isBefore(since)) {
+            continue;
+          }
+          const day = published.format('YYYY-MM-DD');
+          posts[day] = (posts[day] || 0) + 1;
+        }
+
+        // newest first: once a page ends before the range, the rest is older
+        if (data?.length && dayjs(data.at(-1).timestamp).isBefore(since)) {
+          nextUrl = undefined;
+        }
+      }
+
+      return [
+        ...(typeof followers_count === 'number'
+          ? [
+              {
+                label: 'Followers',
+                percentageChange: 0,
+                data: [{ total: followers_count, date: today }],
+              },
+            ]
+          : []),
+        {
+          label: 'Posts',
+          percentageChange: 0,
+          data: [...Array(range)].map((_, i) => {
+            const day = since.add(i, 'day').format('YYYY-MM-DD');
+            return { total: posts[day] || 0, date: day };
+          }),
+        },
+      ];
+    } catch (err) {
+      console.error('Could not load Instagram followers and posts', err);
+      return [];
+    }
   }
 
   music(accessToken: string, data: { q: string }) {
