@@ -83,6 +83,10 @@ export const Providers = [
     component: InstagramProvider,
   },
   {
+    identifier: 'instagram-unified',
+    component: InstagramProvider,
+  },
+  {
     identifier: 'youtube',
     component: YoutubeProvider,
   },

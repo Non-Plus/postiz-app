@@ -268,6 +268,7 @@ export const ContinueIntegration: FC<{
     const names: Record<string, string> = {
       facebook: 'Facebook',
       instagram: 'Instagram',
+      'instagram-unified': 'Instagram',
       'linkedin-page': 'LinkedIn',
       youtube: 'YouTube',
       gmb: 'Google Business',
