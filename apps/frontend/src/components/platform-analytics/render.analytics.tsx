@@ -5,6 +5,9 @@ import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import { ChartSocial } from '@gitroom/frontend/components/analytics/chart-social';
 import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
+import { useRouter } from 'next/navigation';
+import { useModals } from '@gitroom/frontend/components/layout/new-modal';
+import { CustomVariables } from '@gitroom/frontend/components/launches/add.provider.component';
 
 interface AnalyticsDataItem {
   label: string;
@@ -194,13 +197,39 @@ export const RenderAnalytics: FC<{
     revalidateOnMount: true,
   });
 
+  const t = useT();
+  const router = useRouter();
+  const modal = useModals();
+
   const refreshChannel = useCallback(
     (
         integrationData: Integration & {
           identifier: string;
+          isCustomFields?: boolean;
+          customFields?: any[];
         }
       ) =>
       async () => {
+        // Custom-fields providers (Bluesky, etc.) have no OAuth URL to redirect
+        // to: reconnect by re-entering the credentials, like the menu does.
+        if (integrationData.isCustomFields) {
+          modal.openModal({
+            title: t('custom_url', 'Custom URL'),
+            withCloseButton: false,
+            classNames: {
+              modal: 'md',
+            },
+            children: (
+              <CustomVariables
+                identifier={integrationData.identifier}
+                gotoUrl={(url: string) => router.push(url)}
+                variables={integrationData.customFields || []}
+              />
+            ),
+          });
+          return;
+        }
+
         const { url } = await (
           await fetch(
             `/integrations/social/${integrationData.identifier}?refresh=${integrationData.internalId}`,
@@ -213,8 +242,6 @@ export const RenderAnalytics: FC<{
       },
     []
   );
-
-  const t = useT();
 
   const totals = useMemo(() => {
     return data?.map((p: AnalyticsDataItem) => {

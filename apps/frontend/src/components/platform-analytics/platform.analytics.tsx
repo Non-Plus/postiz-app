@@ -18,6 +18,7 @@ import useCookie from 'react-use-cookie';
 import { SVGLine } from '@gitroom/frontend/components/launches/launches.component';
 import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
 const allowedIntegrations = [
+  'bluesky',
   'facebook',
   'instagram',
   'instagram-standalone',
@@ -79,6 +80,7 @@ export const PlatformAnalytics = () => {
     const arr = [];
     if (
       [
+        'bluesky',
         'facebook',
         'instagram',
         'instagram-standalone',
@@ -100,6 +102,7 @@ export const PlatformAnalytics = () => {
     }
     if (
       [
+        'bluesky',
         'facebook',
         'instagram',
         'instagram-standalone',
@@ -120,9 +123,15 @@ export const PlatformAnalytics = () => {
       });
     }
     if (
-      ['facebook', 'linkedin-page', 'pinterest', 'youtube', 'x', 'gmb'].indexOf(
-        currentIntegration.identifier
-      ) !== -1
+      [
+        'bluesky',
+        'facebook',
+        'linkedin-page',
+        'pinterest',
+        'youtube',
+        'x',
+        'gmb',
+      ].indexOf(currentIntegration.identifier) !== -1
     ) {
       arr.push({
         key: 90,
