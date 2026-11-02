@@ -1,4 +1,5 @@
 import {
+  AnalyticsData,
   AuthTokenDetails,
   PendingCheckResponse,
   PostDetails,
@@ -845,6 +846,131 @@ export class BlueskyProvider extends SocialAbstract implements SocialProvider {
           .pop()}`,
       },
     ];
+  }
+
+  // Counts are public on the Bluesky AppView, so analytics read them there
+  // instead of logging in with the stored credentials (Bluesky rate limits
+  // logins per account)
+  private publicAgent() {
+    return new AtpAgent({ service: 'https://public.api.bsky.app' });
+  }
+
+  async analytics(
+    id: string,
+    accessToken: string,
+    date: number
+  ): Promise<AnalyticsData[]> {
+    const agent = this.publicAgent();
+    // the public API passes ?date= through, the app offers up to 90 days
+    const range = Math.min(Math.max(Math.floor(date), 1), 90);
+    const today = dayjs().format('YYYY-MM-DD');
+    const since = dayjs()
+      .subtract(range - 1, 'day')
+      .startOf('day');
+
+    const { data: profile } = await agent.getProfile({ actor: id });
+
+    // Bluesky keeps no history, so the engagement of the posts published in
+    // the range is grouped by the day they were published
+    const days = [...Array(range)].map((_, i) =>
+      since.add(i, 'day').format('YYYY-MM-DD')
+    );
+    const metrics = {
+      Posts: {} as Record<string, number>,
+      Likes: {} as Record<string, number>,
+      Reposts: {} as Record<string, number>,
+      Replies: {} as Record<string, number>,
+      Quotes: {} as Record<string, number>,
+    };
+
+    let cursor: string | undefined;
+    let pages = 0;
+    do {
+      // top-level posts only, the comments of a thread aren't counted as posts
+      const { data } = await agent.getAuthorFeed({
+        actor: id,
+        filter: 'posts_no_replies',
+        limit: 100,
+        cursor,
+      });
+      cursor = data.cursor;
+      pages++;
+
+      for (const { post, reason } of data.feed) {
+        // a repost of someone else's post
+        if (reason) {
+          continue;
+        }
+
+        const published = dayjs(post.indexedAt);
+        if (published.isBefore(since)) {
+          cursor = undefined;
+          break;
+        }
+
+        const day = published.format('YYYY-MM-DD');
+        metrics.Posts[day] = (metrics.Posts[day] || 0) + 1;
+        metrics.Likes[day] = (metrics.Likes[day] || 0) + (post.likeCount || 0);
+        metrics.Reposts[day] =
+          (metrics.Reposts[day] || 0) + (post.repostCount || 0);
+        metrics.Replies[day] =
+          (metrics.Replies[day] || 0) + (post.replyCount || 0);
+        metrics.Quotes[day] =
+          (metrics.Quotes[day] || 0) + (post.quoteCount || 0);
+      }
+    } while (cursor && pages < 10);
+
+    // numeric totals, the analytics page sums them
+    return [
+      {
+        label: 'Followers',
+        percentageChange: 0,
+        data: [{ total: profile.followersCount || 0, date: today }],
+      },
+      ...Object.entries(metrics).map(([label, totals]) => ({
+        label,
+        percentageChange: 0,
+        data: days.map((day) => ({ total: totals[day] || 0, date: day })),
+      })),
+    ] as any;
+  }
+
+  async postAnalytics(
+    integrationId: string,
+    accessToken: string,
+    postId: string,
+    date: number
+  ): Promise<AnalyticsData[]> {
+    const today = dayjs().format('YYYY-MM-DD');
+
+    try {
+      const {
+        data: {
+          posts: [post],
+        },
+      } = await this.publicAgent().getPosts({ uris: [postId] });
+
+      if (!post) {
+        return [];
+      }
+
+      return [
+        { label: 'Likes', value: post.likeCount },
+        { label: 'Reposts', value: post.repostCount },
+        { label: 'Replies', value: post.replyCount },
+        { label: 'Quotes', value: post.quoteCount },
+      ].map(({ label, value }) => ({
+        label,
+        percentageChange: 0,
+        data: [{ total: String(value || 0), date: today }],
+      }));
+    } catch (err: any) {
+      console.error(
+        'Error fetching Bluesky post analytics:',
+        err?.message || err
+      );
+      return [];
+    }
   }
 
   @Plug({
