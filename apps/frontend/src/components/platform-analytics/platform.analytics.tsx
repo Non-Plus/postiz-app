@@ -10,7 +10,7 @@ import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import { RenderAnalytics } from '@gitroom/frontend/components/platform-analytics/render.analytics';
 import { Select } from '@gitroom/react/form/select';
 import { Button } from '@gitroom/react/form/button';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useToaster } from '@gitroom/react/toaster/toaster';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import { useVariables } from '@gitroom/react/helpers/variable.context';
@@ -36,10 +36,14 @@ export const PlatformAnalytics = () => {
   const fetch = useFetch();
   const t = useT();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { disableXAnalytics } = useVariables();
 
-  const [current, setCurrent] = useState(0);
-  const [key, setKey] = useState(7);
+  // the selected channel and range live in the URL, so a refresh keeps them
+  const [currentId, setCurrentId] = useState(
+    searchParams.get('integration') || ''
+  );
+  const [key, setKey] = useState(+(searchParams.get('date') || 7));
   const [refresh, setRefresh] = useState(false);
   const [collapseMenu, setCollapseMenu] = useCookie('collapseMenu', '0');
   const toaster = useToaster();
@@ -71,8 +75,20 @@ export const PlatformAnalytics = () => {
     );
   }, [data]);
   const currentIntegration = useMemo(() => {
-    return sortedIntegrations[current];
-  }, [current, sortedIntegrations]);
+    return (
+      sortedIntegrations.find(
+        (p: any) => p.id === currentId && !p.refreshNeeded
+      ) ||
+      sortedIntegrations[0]
+    );
+  }, [currentId, sortedIntegrations]);
+  const updateUrl = useCallback((integration: string, date: number) => {
+    window.history.replaceState(
+      null,
+      '',
+      `/analytics?integration=${integration}&date=${date}`
+    );
+  }, []);
   const options = useMemo(() => {
     if (!currentIntegration) {
       return [];
@@ -220,7 +236,7 @@ export const PlatformAnalytics = () => {
             </div>
           </div>
           <div className="flex gap-[15px] mobile:gap-[12px] flex-col mobile:flex-row mobile:overflow-x-auto mobile:ps-[12px] mobile:pt-[6px] mobile:pb-[6px] scrollbar scrollbar-thumb-fifth scrollbar-track-newBgColor">
-            {sortedIntegrations.map((integration, index) => (
+            {sortedIntegrations.map((integration) => (
               <div
                 key={integration.id}
                 onClick={() => {
@@ -235,7 +251,8 @@ export const PlatformAnalytics = () => {
                   setTimeout(() => {
                     setRefresh(false);
                   }, 10);
-                  setCurrent(index);
+                  setCurrentId(integration.id);
+                  updateUrl(integration.id, key);
                 }}
                 className={clsx(
                   'flex gap-[12px] items-center group/profile justify-center hover:bg-boxHover rounded-e-[8px] mobile:shrink-0',
@@ -299,7 +316,11 @@ export const PlatformAnalytics = () => {
                 name="date"
                 disableForm={true}
                 hideErrors={true}
-                onChange={(e) => setKey(+e.target.value)}
+                value={keys}
+                onChange={(e) => {
+                  setKey(+e.target.value);
+                  updateUrl(currentIntegration.id, +e.target.value);
+                }}
               >
                 {options.map((option) => (
                   <option key={option.key} value={option.key}>
