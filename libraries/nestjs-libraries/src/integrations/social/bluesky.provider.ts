@@ -139,6 +139,21 @@ async function startVideoUpload(
   const jobStatus = (await uploadResponse.json()) as AppBskyVideoDefs.JobStatus;
   console.log('JobId:', jobStatus.jobId);
 
+  // A rejected upload (unverified email, daily limit...) comes back without a
+  // job, as { jobStatus: { error } } - surface Bluesky's reason
+  if (!jobStatus.jobId) {
+    const rejected: AppBskyVideoDefs.JobStatus =
+      (jobStatus as any).jobStatus || jobStatus;
+    throw new BadBody(
+      'bluesky',
+      JSON.stringify(jobStatus),
+      {} as any,
+      `Could not upload video to Bluesky: ${
+        rejected.message || rejected.error || uploadResponse.status
+      }`
+    );
+  }
+
   if (jobStatus.state === 'JOB_STATE_FAILED') {
     throw new BadBody(
       'bluesky',

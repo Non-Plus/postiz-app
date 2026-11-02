@@ -36,7 +36,7 @@ const copilotCors = () => ({
     'http://localhost:6274',
     ...(process.env.MAIN_URL ? [process.env.MAIN_URL] : []),
   ],
-  credentials: !process.env.NOT_SECURED,
+  credentials: true,
 });
 
 @Controller('/copilot')
