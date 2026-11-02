@@ -9,6 +9,7 @@ import { TumblrContinue } from '@gitroom/frontend/components/new-launch/provider
 
 export const continueProviderList = {
   instagram: InstagramContinue,
+  'instagram-unified': InstagramContinue,
   facebook: FacebookContinue,
   'linkedin-page': LinkedinContinue,
   gmb: GmbContinue,
