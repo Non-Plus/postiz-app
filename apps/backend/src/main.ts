@@ -24,7 +24,8 @@ async function start() {
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
     cors: {
-      ...(!process.env.NOT_SECURED ? { credentials: true } : {}),
+      // also when NOT_SECURED: the local uploader and CopilotKit always send cookies
+      credentials: true,
       allowedHeaders: [
         'Content-Type',
         'Authorization',
